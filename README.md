@@ -15,3 +15,10 @@ It supports:
 - `client/`: React + Vite frontend
 - `server/`: Express + SQLite backend
 - `server/data/`: local database files generated at runtime
+
+## Render Deploy Notes
+
+- Build command: `npm install && npm run build`
+- Start command: `npm start`
+- Required env vars: set at least `JWT_SECRET`
+- Recommended env vars: `CORS_ORIGIN=https://your-render-domain.onrender.com`
