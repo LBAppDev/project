@@ -25,6 +25,14 @@ export function AssessmentSection({ section, values, language, onChange }: Asses
             return null;
           }
 
+          if (field.type === 'heading') {
+            return (
+              <div key={field.key} className="section-subheading">
+                <h4>{localizeText(field.label, language)}</h4>
+              </div>
+            );
+          }
+
           return (
             <label key={field.key} className={field.type === 'textarea' || field.type === 'multi' ? 'field full' : 'field'}>
               <span>

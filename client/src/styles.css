@@ -50,7 +50,8 @@ a {
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   margin: 0;
   font-family: var(--font-display);
 }
@@ -517,6 +518,17 @@ p {
 
 .section-grid {
   padding: 1.2rem;
+}
+
+.section-subheading {
+  grid-column: 1 / -1;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(88, 126, 149, 0.14);
+}
+
+.section-subheading h4 {
+  font-size: 1rem;
+  color: var(--primary-dark);
 }
 
 .checkbox-grid {
