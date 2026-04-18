@@ -450,6 +450,60 @@ export const assessmentSchema: SectionSchema[] = [
   },
 ];
 
+const breathingSection = assessmentSchema.find((section) => section.key === 'breathing');
+if (breathingSection) {
+  const respiratoryRhythmField: FieldSchema = {
+    key: 'respiratoryRhythm',
+    type: 'multi',
+    label: { fr: 'Rythme respiratoire', en: 'Respiratory rhythm', ar: 'النمط التنفسي' },
+    options: [
+      { value: 'dyspnea', label: { fr: 'Dyspnee', en: 'Dyspnea', ar: 'ضيق التنفس' } },
+      { value: 'tachypnea', label: { fr: 'Tachypnee', en: 'Tachypnea', ar: 'تسرع التنفس' } },
+      { value: 'bradypnea', label: { fr: 'Bradypnee', en: 'Bradypnea', ar: 'بطء التنفس' } },
+      { value: 'apnea', label: { fr: 'Apnee', en: 'Apnea', ar: 'انقطاع النفس' } },
+      { value: 'polypnea', label: { fr: 'Polypnee', en: 'Polypnea', ar: 'تعدد التنفس' } },
+      { value: 'orthopnea', label: { fr: 'Orthopnee', en: 'Orthopnea', ar: 'ضيق النفس الاضطجاعي' } },
+    ],
+  };
+
+  const dyspneaIndex = breathingSection.fields.findIndex((field) => field.key === 'dyspnea');
+  if (dyspneaIndex >= 0) {
+    breathingSection.fields.splice(dyspneaIndex, 0, respiratoryRhythmField);
+  }
+
+  breathingSection.fields = breathingSection.fields.filter((field) => ![
+    'dyspnea',
+    'breathingRateState',
+    'apnea',
+    'polypnea',
+    'orthopnea',
+  ].includes(field.key));
+}
+
+for (const section of assessmentSchema) {
+  const edemaKeys = ['lowerLimbEdemaCardiac', 'lowerLimbEdemaUrinary', 'upperLimbEdemaUrinary'];
+
+  for (const edemaKey of edemaKeys) {
+    const edemaIndex = section.fields.findIndex((field) => field.key === edemaKey);
+    if (edemaIndex < 0) {
+      continue;
+    }
+
+    const godetKey = `${edemaKey}Godet`;
+    if (section.fields.some((field) => field.key === godetKey)) {
+      continue;
+    }
+
+    section.fields.splice(edemaIndex + 1, 0, {
+      key: godetKey,
+      type: 'yesno',
+      label: { fr: 'Signe de godet', en: 'Pitting edema sign', ar: 'علامة الانطباع' },
+      dependsOn: edemaKey,
+      dependsValue: 'yes',
+    });
+  }
+}
+
 export function buildInitialAssessment() {
   return assessmentSchema.reduce<Record<string, Record<string, AssessmentValue>>>((sectionAcc, section) => {
     sectionAcc[section.key] = section.fields.reduce<Record<string, AssessmentValue>>((fieldAcc, field) => {
