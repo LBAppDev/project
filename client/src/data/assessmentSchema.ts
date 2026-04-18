@@ -196,7 +196,6 @@ export const assessmentSchema: SectionSchema[] = [
         ],
       },
       yesNoField('palpitation', { fr: 'Palpitation', en: 'Palpitations', ar: 'خفقان' }),
-      yesNoField('somnolence', { fr: 'Somnolence', en: 'Somnolence', ar: 'نعاس' }),
       yesNoField('mottling', { fr: 'Marbrure', en: 'Mottling', ar: 'تبقع جلدي' }),
       yesNoField('pallor', { fr: 'Paleur', en: 'Pallor', ar: 'شحوب' }),
       {
@@ -208,7 +207,6 @@ export const assessmentSchema: SectionSchema[] = [
           { value: 'lipothymia', label: { fr: 'Lipothymie', en: 'Lipothymia', ar: 'ما قبل الإغماء' } },
         ],
       },
-      yesNoField('anxiety', { fr: 'Anxiete', en: 'Anxiety', ar: 'قلق' }),
       yesNoField('jugularVeinDistension', { fr: 'Turgescence des veines jugulaire', en: 'Jugular vein distension', ar: 'احتقان أوردة الرقبة' }),
       yesNoField('lowerLimbEdemaCardiac', { fr: 'Oedeme des membres inferieur', en: 'Lower limb edema', ar: 'وذمة الأطراف السفلية' }),
       {
@@ -220,6 +218,8 @@ export const assessmentSchema: SectionSchema[] = [
           { value: 'unconscious', label: { fr: 'Inconscient', en: 'Unconscious', ar: 'فاقد الوعي' } },
         ],
       },
+      yesNoField('somnolence', { fr: 'Somnolence', en: 'Somnolence', ar: 'نعاس' }),
+      yesNoField('anxiety', { fr: 'Anxiete', en: 'Anxiety', ar: 'قلق' }),
       {
         key: 'glasgowScore',
         type: 'text',
