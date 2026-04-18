@@ -7,10 +7,11 @@ interface Nurse {
   id: number;
   fullName: string;
   username: string;
+  role: 'nurse' | 'doctor';
   status: 'active' | 'inactive';
 }
 
-const blankForm = { id: 0, fullName: '', username: '', password: '', status: 'active' as 'active' | 'inactive' };
+const blankForm = { id: 0, fullName: '', username: '', password: '', role: 'nurse' as 'nurse' | 'doctor', status: 'active' as 'active' | 'inactive' };
 
 export function NursesPage() {
   const { token } = useAuth();
@@ -72,6 +73,13 @@ export function NursesPage() {
               <input type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} />
             </label>
             <label className="field">
+              <span>{t('nurses.role')}</span>
+              <select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as 'nurse' | 'doctor' }))}>
+                <option value="nurse">{t('nurses.nurseRole')}</option>
+                <option value="doctor">{t('nurses.doctorRole')}</option>
+              </select>
+            </label>
+            <label className="field">
               <span>{t('common.status')}</span>
               <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as 'active' | 'inactive' }))}>
                 <option value="active">{t('nurses.active')}</option>
@@ -92,7 +100,7 @@ export function NursesPage() {
               <article key={nurse.id} className="table-row">
                 <div className="row-main">
                   <strong>{nurse.fullName}</strong>
-                  <p className="muted">@{nurse.username}</p>
+                  <p className="muted">@{nurse.username} | {nurse.role === 'doctor' ? t('nurses.doctorRole') : t('nurses.nurseRole')}</p>
                 </div>
                 <div className="row-actions">
                   <span className={nurse.status === 'active' ? 'status-pill active' : 'status-pill inactive'}>

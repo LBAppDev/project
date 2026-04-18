@@ -5,7 +5,7 @@ interface User {
   id: number;
   fullName: string;
   username: string;
-  role: 'admin' | 'nurse';
+  role: 'admin' | 'nurse' | 'doctor';
   status: 'active' | 'inactive';
 }
 

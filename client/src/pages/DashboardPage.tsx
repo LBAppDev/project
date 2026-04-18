@@ -25,7 +25,7 @@ export function DashboardPage() {
     <section className="page-stack">
       <div className="section-heading page-heading-card">
         <div>
-          <p className="eyebrow">{user?.role === 'admin' ? t('dashboard.helloAdmin') : t('dashboard.helloNurse')}</p>
+          <p className="eyebrow">{user?.role === 'admin' ? t('dashboard.helloAdmin') : user?.role === 'doctor' ? t('dashboard.helloDoctor') : t('dashboard.helloNurse')}</p>
           <h2>{t('nav.dashboard')}</h2>
         </div>
         <p className="muted heading-note">{t('dashboard.quickNote')}</p>

@@ -16,7 +16,8 @@ export function AppLayout() {
     { to: '/', label: t('nav.dashboard'), end: true },
     ...(user?.role === 'admin' ? [{ to: '/nurses', label: t('nav.nurses'), end: false }] : []),
     { to: '/patients', label: t('nav.patients'), end: true },
-    { to: '/patients/new', label: t('nav.addPatient'), end: true },
+    { to: '/patients/discharged', label: t('nav.dischargedPatients'), end: true },
+    ...(user?.role !== 'doctor' ? [{ to: '/patients/new', label: t('nav.addPatient'), end: true }] : []),
   ];
 
   return (
@@ -25,7 +26,7 @@ export function AppLayout() {
         <div className="brand-panel">
           <p className="eyebrow sidebar-eyebrow">{t('app.title')}</p>
           <h1>{t('app.subtitle')}</h1>
-          <p className="sidebar-copy">{user?.role === 'admin' ? t('dashboard.helloAdmin') : t('dashboard.helloNurse')}</p>
+          <p className="sidebar-copy">{user?.role === 'admin' ? t('dashboard.helloAdmin') : user?.role === 'doctor' ? t('dashboard.helloDoctor') : t('dashboard.helloNurse')}</p>
         </div>
 
         <nav className="sidebar-nav">
@@ -63,7 +64,7 @@ export function AppLayout() {
       <main className="main-content">
         <header className="topbar">
           <div className="topbar-copy">
-            <p className="eyebrow">{user?.role === 'admin' ? t('dashboard.helloAdmin') : t('dashboard.helloNurse')}</p>
+            <p className="eyebrow">{user?.role === 'admin' ? t('dashboard.helloAdmin') : user?.role === 'doctor' ? t('dashboard.helloDoctor') : t('dashboard.helloNurse')}</p>
             <strong>{user?.fullName}</strong>
           </div>
           <div className="topbar-meta">

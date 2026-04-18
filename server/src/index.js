@@ -84,7 +84,7 @@ app.post('/api/nurses', requireAuth, requireRole('admin'), async (req, res) => {
     fullName: req.body.fullName.trim(),
     username: req.body.username.trim(),
     passwordHash: await bcrypt.hash(req.body.password, 10),
-    role: 'nurse',
+    role: req.body.role === 'doctor' ? 'doctor' : 'nurse',
     status: req.body.status === 'inactive' ? 'inactive' : 'active',
   });
 
@@ -100,6 +100,7 @@ app.put('/api/nurses/:id', requireAuth, requireRole('admin'), async (req, res) =
   const updated = await updateUser(Number(req.params.id), {
     fullName: req.body.fullName?.trim(),
     username: req.body.username?.trim(),
+    role: req.body.role === 'doctor' ? 'doctor' : 'nurse',
     status: req.body.status,
     passwordHash: req.body.password ? await bcrypt.hash(req.body.password, 10) : undefined,
   });
@@ -112,10 +113,10 @@ app.put('/api/nurses/:id', requireAuth, requireRole('admin'), async (req, res) =
 });
 
 app.get('/api/patients', requireAuth, async (req, res) => {
-  res.json(await listPatients(req.query.search?.toString() ?? ''));
+  res.json(await listPatients(req.query.search?.toString() ?? '', req.query.status?.toString() ?? 'active'));
 });
 
-app.post('/api/patients', requireAuth, async (req, res) => {
+app.post('/api/patients', requireAuth, requireRole(['admin', 'nurse']), async (req, res) => {
   const missing = requireFields(req.body, ['firstName', 'lastName', 'admissionDate', 'bedNumber']);
   if (missing) {
     return res.status(400).json({ message: `Missing field: ${missing}` });
@@ -129,6 +130,7 @@ app.post('/api/patients', requireAuth, async (req, res) => {
       weight: normalizeNumber(req.body.weight),
       medicalHistory: req.body.medicalHistory?.trim() ?? '',
       admissionDate: req.body.admissionDate,
+      dischargeDate: req.body.dischargeDate || '',
       bedNumber: req.body.bedNumber.trim(),
     },
     req.user.id,
@@ -146,7 +148,7 @@ app.get('/api/patients/:id', requireAuth, async (req, res) => {
   return res.json({ patient, entries: await listEntriesByPatient(patient.id) });
 });
 
-app.put('/api/patients/:id', requireAuth, async (req, res) => {
+app.put('/api/patients/:id', requireAuth, requireRole(['admin', 'nurse']), async (req, res) => {
   const missing = requireFields(req.body, ['firstName', 'lastName', 'admissionDate', 'bedNumber']);
   if (missing) {
     return res.status(400).json({ message: `Missing field: ${missing}` });
@@ -159,6 +161,7 @@ app.put('/api/patients/:id', requireAuth, async (req, res) => {
     weight: normalizeNumber(req.body.weight),
     medicalHistory: req.body.medicalHistory?.trim() ?? '',
     admissionDate: req.body.admissionDate,
+    dischargeDate: req.body.dischargeDate || '',
     bedNumber: req.body.bedNumber.trim(),
   });
 
@@ -169,10 +172,14 @@ app.put('/api/patients/:id', requireAuth, async (req, res) => {
   return res.json(patient);
 });
 
-app.post('/api/patients/:id/entries', requireAuth, async (req, res) => {
+app.post('/api/patients/:id/entries', requireAuth, requireRole(['admin', 'nurse']), async (req, res) => {
   const patient = await getPatientById(Number(req.params.id));
   if (!patient) {
     return res.status(404).json({ message: 'Patient introuvable' });
+  }
+
+  if (patient.status === 'discharged') {
+    return res.status(409).json({ message: 'Patient deja sorti' });
   }
 
   const missing = requireFields(req.body, ['entryDate', 'entryTime', 'assessment']);
@@ -193,7 +200,7 @@ app.get('/api/entries/:id', requireAuth, async (req, res) => {
   return res.json(entry);
 });
 
-app.put('/api/entries/:id', requireAuth, async (req, res) => {
+app.put('/api/entries/:id', requireAuth, requireRole(['admin', 'nurse']), async (req, res) => {
   const missing = requireFields(req.body, ['entryDate', 'entryTime', 'assessment']);
   if (missing) {
     return res.status(400).json({ message: `Missing field: ${missing}` });
@@ -207,7 +214,7 @@ app.put('/api/entries/:id', requireAuth, async (req, res) => {
   return res.json(entry);
 });
 
-app.delete('/api/entries/:id', requireAuth, async (req, res) => {
+app.delete('/api/entries/:id', requireAuth, requireRole(['admin', 'nurse']), async (req, res) => {
   const ok = await deleteEntry(Number(req.params.id));
   if (!ok) {
     return res.status(404).json({ message: 'Observation introuvable' });

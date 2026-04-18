@@ -77,6 +77,10 @@ export function LoginPage() {
               <span className="role-badge">Nurse</span>
               <p>{t('auth.nurse')}</p>
             </div>
+            <div className="credential-line">
+              <span className="role-badge">Doctor</span>
+              <p>{t('auth.doctor')}</p>
+            </div>
           </div>
         </div>
 

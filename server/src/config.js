@@ -42,5 +42,8 @@ export const appConfig = {
   seedNurseUsername: process.env.SEED_NURSE_USERNAME || 'nurse.demo',
   seedNursePassword: process.env.SEED_NURSE_PASSWORD || 'nurse123',
   seedNurseName: process.env.SEED_NURSE_NAME || 'Infirmier demo',
+  seedDoctorUsername: process.env.SEED_DOCTOR_USERNAME || 'doctor.demo',
+  seedDoctorPassword: process.env.SEED_DOCTOR_PASSWORD || 'doctor123',
+  seedDoctorName: process.env.SEED_DOCTOR_NAME || 'Medecin demo',
   clientDistPath: path.resolve(__dirname, '../../client/dist'),
 };

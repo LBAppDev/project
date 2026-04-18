@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.JSX.Element;
-  roles?: Array<'admin' | 'nurse'>;
+  roles?: Array<'admin' | 'nurse' | 'doctor'>;
 }
 
 export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {

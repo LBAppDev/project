@@ -1,4 +1,5 @@
 import { assessmentSchema, localizeText, type AssessmentValue, type Language } from '../data/assessmentSchema';
+import { formatAdmissionDateTime } from './patientAdmission';
 
 export interface ObservationAssessment {
   [sectionKey: string]: Record<string, AssessmentValue>;
@@ -163,7 +164,7 @@ export function downloadObservationDocument(params: ExportParams) {
   <div class="meta">
     <p><strong>${escapeHtml(params.labels.patientLabel)}:</strong> ${escapeHtml(`${params.patient.lastName} ${params.patient.firstName}`)}</p>
     <p><strong>${escapeHtml(params.labels.bedLabel)}:</strong> ${escapeHtml(params.patient.bedNumber)}</p>
-    <p><strong>${escapeHtml(params.labels.admissionDateLabel)}:</strong> ${escapeHtml(params.patient.admissionDate)}</p>
+    <p><strong>${escapeHtml(params.labels.admissionDateLabel)}:</strong> ${escapeHtml(formatAdmissionDateTime(params.patient.admissionDate))}</p>
     <p><strong>${escapeHtml(params.labels.dateLabel)}:</strong> ${escapeHtml(params.entry.entryDate)}</p>
     <p><strong>${escapeHtml(params.labels.timeLabel)}:</strong> ${escapeHtml(params.entry.entryTime)}</p>
     <p><strong>${escapeHtml(params.labels.createdByLabel)}:</strong> ${escapeHtml(params.entry.createdByName)}</p>

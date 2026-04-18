@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { apiRequest } from '../lib/api';
 import { downloadObservationDocument } from '../lib/observationDisplay';
+import { formatAdmissionDateTime } from '../lib/patientAdmission';
 
 interface Entry {
   id: number;
@@ -23,16 +24,18 @@ interface PatientResponse {
     weight: number | null;
     medicalHistory: string | null;
     admissionDate: string;
+    dischargeDate: string;
+    status: 'active' | 'discharged';
     bedNumber: string;
   };
   entries: Entry[];
 }
 
-type HistoryMode = 'day' | 'month' | 'year';
+type HistoryMode = 'hour' | 'day' | 'month' | 'year';
 
 export function PatientDetailsPage() {
   const { patientId } = useParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { language, t } = useLanguage();
   const navigate = useNavigate();
   const [data, setData] = useState<PatientResponse | null>(null);
@@ -49,6 +52,7 @@ export function PatientDetailsPage() {
     loadPatient();
   }, [patientId, token]);
 
+  const hourGroups = useMemo(() => buildHourGroups(data?.entries ?? [], language), [data, language]);
   const dayGroups = useMemo(() => buildDayGroups(data?.entries ?? [], language), [data, language]);
   const monthGroups = useMemo(() => buildMonthGroups(data?.entries ?? [], language), [data, language]);
   const yearGroups = useMemo(() => buildYearGroups(data?.entries ?? [], language), [data, language]);
@@ -91,6 +95,9 @@ export function PatientDetailsPage() {
     return <div className="page-loader">{t('common.loading')}</div>;
   }
 
+  const canEdit = user?.role === 'admin' || user?.role === 'nurse';
+  const isDischarged = data.patient.status === 'discharged';
+
   return (
     <section className="page-stack">
       <article className="patient-header-card">
@@ -99,13 +106,23 @@ export function PatientDetailsPage() {
           <h2>{data.patient.lastName} {data.patient.firstName}</h2>
           <div className="meta-badges">
             <span className="date-pill">{t('patients.bed')}: {data.patient.bedNumber}</span>
-            <span className="date-pill">{t('patients.admissionDate')}: {data.patient.admissionDate}</span>
+            <span className="date-pill">{t('patients.admissionDate')}: {formatAdmissionDateTime(data.patient.admissionDate)}</span>
+            <span className="date-pill">
+              {t('patients.dischargeStatus')}: {isDischarged ? t('patients.dischargedStatus') : t('patients.activeStatus')}
+            </span>
+            {isDischarged ? (
+              <span className="date-pill">{t('patients.dischargeDate')}: {formatAdmissionDateTime(data.patient.dischargeDate)}</span>
+            ) : null}
           </div>
         </div>
-        <div className="inline-actions">
-          <Link className="ghost-button text-link-button" to={`/patients/${data.patient.id}/edit`}>{t('patients.update')}</Link>
-          <Link className="primary-button text-link-button" to={`/patients/${data.patient.id}/entries/new`}>{t('patients.newEntry')}</Link>
-        </div>
+        {canEdit ? (
+          <div className="inline-actions">
+            <Link className="ghost-button text-link-button" to={`/patients/${data.patient.id}/edit`}>{t('patients.update')}</Link>
+            {!isDischarged ? (
+              <Link className="primary-button text-link-button" to={`/patients/${data.patient.id}/entries/new`}>{t('patients.newEntry')}</Link>
+            ) : null}
+          </div>
+        ) : null}
       </article>
 
       <section className="panel-card">
@@ -134,6 +151,13 @@ export function PatientDetailsPage() {
           <div className="history-mode-switcher">
             <button
               type="button"
+              className={historyMode === 'hour' ? 'chip active' : 'chip'}
+              onClick={() => setHistoryMode('hour')}
+            >
+              {t('patients.byHour')}
+            </button>
+            <button
+              type="button"
               className={historyMode === 'day' ? 'chip active' : 'chip'}
               onClick={() => setHistoryMode('day')}
             >
@@ -158,6 +182,20 @@ export function PatientDetailsPage() {
 
         {data.entries.length ? (
           <div className="archive-stack">
+            {historyMode === 'hour' ? (
+              hourGroups.map((group, index) => (
+                <details key={group.key} className="archive-group archive-day" open={index === 0}>
+                  <summary>
+                    <span>{group.label}</span>
+                    <strong>{group.entries.length}</strong>
+                  </summary>
+                  <div className="archive-body">
+                    {group.entries.map((entry) => renderEntryRow(entry, navigate, handleExport, handleDelete, t, canEdit))}
+                  </div>
+                </details>
+              ))
+            ) : null}
+
             {historyMode === 'day' ? (
               dayGroups.map((group, index) => (
                 <details key={group.key} className="archive-group archive-day" open={index === 0}>
@@ -166,7 +204,7 @@ export function PatientDetailsPage() {
                     <strong>{group.entries.length}</strong>
                   </summary>
                   <div className="archive-body">
-                    {group.entries.map((entry) => renderEntryRow(entry, navigate, handleExport, handleDelete, t))}
+                    {group.entries.map((entry) => renderEntryRow(entry, navigate, handleExport, handleDelete, t, canEdit))}
                   </div>
                 </details>
               ))
@@ -187,7 +225,7 @@ export function PatientDetailsPage() {
                           <strong>{day.entries.length}</strong>
                         </summary>
                         <div className="archive-body">
-                          {day.entries.map((entry) => renderEntryRow(entry, navigate, handleExport, handleDelete, t))}
+                          {day.entries.map((entry) => renderEntryRow(entry, navigate, handleExport, handleDelete, t, canEdit))}
                         </div>
                       </details>
                     ))}
@@ -218,7 +256,7 @@ export function PatientDetailsPage() {
                                 <strong>{day.entries.length}</strong>
                               </summary>
                               <div className="archive-body">
-                                {day.entries.map((entry) => renderEntryRow(entry, navigate, handleExport, handleDelete, t))}
+                                {day.entries.map((entry) => renderEntryRow(entry, navigate, handleExport, handleDelete, t, canEdit))}
                               </div>
                             </details>
                           ))}
@@ -244,6 +282,7 @@ function renderEntryRow(
   handleExport: (entry: Entry) => void,
   handleDelete: (entryId: number) => void,
   t: (key: string) => string,
+  canEdit: boolean,
 ) {
   return (
     <div key={entry.id} className="entry-row-card">
@@ -258,12 +297,16 @@ function renderEntryRow(
         <button type="button" className="ghost-button" onClick={() => handleExport(entry)}>
           {t('common.export')}
         </button>
-        <button type="button" className="ghost-button" onClick={() => navigate(`/entries/${entry.id}/edit`)}>
-          {t('common.edit')}
-        </button>
-        <button type="button" className="ghost-button danger" onClick={() => handleDelete(entry.id)}>
-          {t('common.delete')}
-        </button>
+        {canEdit ? (
+          <button type="button" className="ghost-button" onClick={() => navigate(`/entries/${entry.id}/edit`)}>
+            {t('common.edit')}
+          </button>
+        ) : null}
+        {canEdit ? (
+          <button type="button" className="ghost-button danger" onClick={() => handleDelete(entry.id)}>
+            {t('common.delete')}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -282,6 +325,23 @@ function buildDayGroups(entries: Entry[], language: string) {
     key: date,
     label: formatDayLabel(date, language),
     entries: dayEntries,
+  }));
+}
+
+function buildHourGroups(entries: Entry[], language: string) {
+  const hourMap = new Map<string, Entry[]>();
+
+  for (const entry of entries) {
+    const hourKey = `${entry.entryDate} ${entry.entryTime.slice(0, 2)}:00`;
+    const bucket = hourMap.get(hourKey) ?? [];
+    bucket.push(entry);
+    hourMap.set(hourKey, bucket);
+  }
+
+  return Array.from(hourMap.entries()).map(([hourKey, hourEntries]) => ({
+    key: hourKey,
+    label: formatHourLabel(hourKey, language),
+    entries: hourEntries,
   }));
 }
 
@@ -333,6 +393,12 @@ function formatMonthLabel(monthKey: string, language: string) {
     month: 'long',
     year: 'numeric',
   }).format(new Date(`${monthKey}-01T12:00:00`));
+}
+
+function formatHourLabel(hourKey: string, language: string) {
+  const [date, hour] = hourKey.split(' ');
+
+  return `${formatDayLabel(date, language)} | ${hour}`;
 }
 
 function resolveLocale(language: string) {

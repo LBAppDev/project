@@ -6,6 +6,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { type AssessmentValue } from '../data/assessmentSchema';
 import { apiRequest } from '../lib/api';
 import { downloadObservationDocument, getObservationSections } from '../lib/observationDisplay';
+import { formatAdmissionDateTime } from '../lib/patientAdmission';
 
 interface EntryResponse {
   id: number;
@@ -32,7 +33,7 @@ interface PatientResponse {
 
 export function ObservationDetailsPage() {
   const { entryId } = useParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { language, t } = useLanguage();
   const navigate = useNavigate();
   const [entry, setEntry] = useState<EntryResponse | null>(null);
@@ -104,9 +105,11 @@ export function ObservationDetailsPage() {
           <button type="button" className="ghost-button" onClick={handleExport}>
             {t('common.export')}
           </button>
-          <Link className="primary-button text-link-button" to={`/entries/${entry.id}/edit`}>
-            {t('common.edit')}
-          </Link>
+          {user?.role !== 'doctor' ? (
+            <Link className="primary-button text-link-button" to={`/entries/${entry.id}/edit`}>
+              {t('common.edit')}
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -131,6 +134,10 @@ export function ObservationDetailsPage() {
           <article className="detail-stat">
             <span className="observation-label">{t('patients.bed')}</span>
             <strong>{patient.bedNumber}</strong>
+          </article>
+          <article className="detail-stat">
+            <span className="observation-label">{t('patients.admissionDate')}</span>
+            <strong>{formatAdmissionDateTime(patient.admissionDate)}</strong>
           </article>
           <article className="detail-stat">
             <span className="observation-label">{t('entry.updatedAt')}</span>

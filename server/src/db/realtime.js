@@ -105,6 +105,8 @@ function mapPatientRow(row) {
     weight: row.weight ?? null,
     medicalHistory: row.medical_history ?? '',
     admissionDate: row.admission_date,
+    dischargeDate: row.discharge_date ?? '',
+    status: row.discharge_date ? 'discharged' : 'active',
     bedNumber: row.bed_number,
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
@@ -210,6 +212,7 @@ async function seedDefaults() {
   const users = await getAllUsersRaw();
   const adminExists = users.some((user) => user.role === 'admin');
   const nurseExists = users.some((user) => user.username === appConfig.seedNurseUsername);
+  const doctorExists = users.some((user) => user.username === appConfig.seedDoctorUsername);
 
   if (!adminExists) {
     const timestamp = now();
@@ -242,6 +245,22 @@ async function seedDefaults() {
       updated_at: timestamp,
     });
   }
+
+  if (!doctorExists) {
+    const timestamp = now();
+    const id = await nextId('users');
+
+    await usersRef().child(String(id)).set({
+      id,
+      full_name: appConfig.seedDoctorName,
+      username: appConfig.seedDoctorUsername,
+      password_hash: bcrypt.hashSync(appConfig.seedDoctorPassword, 10),
+      role: 'doctor',
+      status: 'active',
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
+  }
 }
 
 export { sanitizeUser };
@@ -250,7 +269,7 @@ export async function listUsers() {
   const users = await getAllUsersRaw();
 
   return users
-    .filter((user) => user.role === 'nurse')
+    .filter((user) => user.role === 'nurse' || user.role === 'doctor')
     .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr', { sensitivity: 'base' }))
     .map(sanitizeUser);
 }
@@ -273,7 +292,7 @@ export async function createUser({ fullName, username, passwordHash, role = 'nur
   return getUserById(id);
 }
 
-export async function updateUser(id, { fullName, username, status, passwordHash }) {
+export async function updateUser(id, { fullName, username, role, status, passwordHash }) {
   const current = await getUserByIdRaw(id);
   if (!current) {
     return null;
@@ -282,6 +301,7 @@ export async function updateUser(id, { fullName, username, status, passwordHash 
   await usersRef().child(String(id)).update({
     full_name: fullName ?? current.full_name,
     username: username ?? current.username,
+    role: role ?? current.role,
     status: status ?? current.status,
     password_hash: passwordHash ?? current.password_hash,
     updated_at: now(),
@@ -305,11 +325,22 @@ export async function getUserByUsername(username) {
   return users.find((user) => user.username === username) ?? null;
 }
 
-export async function listPatients(search = '') {
+export async function listPatients(search = '', status = 'active') {
   const patients = await getAllPatientsRaw();
   const query = search.trim().toLowerCase();
 
   return patients
+    .filter((patient) => {
+      if (status === 'active') {
+        return !patient.discharge_date;
+      }
+
+      if (status === 'discharged') {
+        return Boolean(patient.discharge_date);
+      }
+
+      return true;
+    })
     .filter((patient) => {
       if (!query) {
         return true;
@@ -335,6 +366,7 @@ export async function createPatient(input, userId) {
     weight: input.weight ?? null,
     medical_history: input.medicalHistory || null,
     admission_date: input.admissionDate,
+    discharge_date: input.dischargeDate || null,
     bed_number: input.bedNumber,
     created_by_user_id: userId,
     created_at: timestamp,
@@ -358,6 +390,7 @@ export async function updatePatient(id, input) {
     weight: input.weight ?? null,
     medical_history: input.medicalHistory || null,
     admission_date: input.admissionDate,
+    discharge_date: input.dischargeDate || null,
     bed_number: input.bedNumber,
     updated_at: now(),
   });

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { apiRequest } from '../lib/api';
+import { buildAdmissionDateTime, splitAdmissionDateTime } from '../lib/patientAdmission';
 
 const emptyPatient = {
   firstName: '',
@@ -11,6 +12,9 @@ const emptyPatient = {
   weight: '',
   medicalHistory: '',
   admissionDate: '',
+  admissionTime: '',
+  dischargeDate: '',
+  dischargeTime: '',
   bedNumber: '',
 };
 
@@ -26,15 +30,21 @@ export function PatientFormPage() {
       return;
     }
 
-    apiRequest<{ patient: { firstName: string; lastName: string; age: number | null; weight: number | null; medicalHistory: string | null; admissionDate: string; bedNumber: string } }>(`/patients/${patientId}`, {}, token)
+    apiRequest<{ patient: { firstName: string; lastName: string; age: number | null; weight: number | null; medicalHistory: string | null; admissionDate: string; dischargeDate: string; bedNumber: string } }>(`/patients/${patientId}`, {}, token)
       .then((response) => {
+        const admission = splitAdmissionDateTime(response.patient.admissionDate);
+        const discharge = splitAdmissionDateTime(response.patient.dischargeDate);
+
         setForm({
           firstName: response.patient.firstName,
           lastName: response.patient.lastName,
           age: response.patient.age?.toString() ?? '',
           weight: response.patient.weight?.toString() ?? '',
           medicalHistory: response.patient.medicalHistory ?? '',
-          admissionDate: response.patient.admissionDate,
+          admissionDate: admission.date,
+          admissionTime: admission.time,
+          dischargeDate: discharge.date,
+          dischargeTime: discharge.time,
           bedNumber: response.patient.bedNumber,
         });
       })
@@ -44,9 +54,14 @@ export function PatientFormPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const isEdit = Boolean(patientId);
+    const payload = {
+      ...form,
+      admissionDate: buildAdmissionDateTime(form.admissionDate, form.admissionTime),
+      dischargeDate: buildAdmissionDateTime(form.dischargeDate, form.dischargeTime),
+    };
     const response = await apiRequest<{ id: number }>(isEdit ? `/patients/${patientId}` : '/patients', {
       method: isEdit ? 'PUT' : 'POST',
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     }, token);
     navigate(`/patients/${response.id ?? patientId}`);
   }
@@ -80,6 +95,18 @@ export function PatientFormPage() {
         <label className="field">
           <span>{t('patients.admissionDate')}</span>
           <input type="date" value={form.admissionDate} onChange={(event) => setForm((current) => ({ ...current, admissionDate: event.target.value }))} required />
+        </label>
+        <label className="field">
+          <span>{t('entry.time')} ({t('common.optional')})</span>
+          <input type="time" value={form.admissionTime} onChange={(event) => setForm((current) => ({ ...current, admissionTime: event.target.value }))} />
+        </label>
+        <label className="field">
+          <span>{t('patients.dischargeDate')} ({t('common.optional')})</span>
+          <input type="date" value={form.dischargeDate} onChange={(event) => setForm((current) => ({ ...current, dischargeDate: event.target.value }))} />
+        </label>
+        <label className="field">
+          <span>{t('entry.time')} ({t('common.optional')})</span>
+          <input type="time" value={form.dischargeTime} onChange={(event) => setForm((current) => ({ ...current, dischargeTime: event.target.value }))} />
         </label>
         <label className="field">
           <span>{t('patients.bed')}</span>

@@ -25,13 +25,14 @@ export function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="nurses" element={<ProtectedRoute roles={['admin']}><NursesPage /></ProtectedRoute>} />
-          <Route path="patients" element={<PatientsPage />} />
-          <Route path="patients/new" element={<PatientFormPage />} />
+          <Route path="patients" element={<PatientsPage status="active" />} />
+          <Route path="patients/discharged" element={<PatientsPage status="discharged" />} />
+          <Route path="patients/new" element={<ProtectedRoute roles={['admin', 'nurse']}><PatientFormPage /></ProtectedRoute>} />
           <Route path="patients/:patientId" element={<PatientDetailsPage />} />
-          <Route path="patients/:patientId/edit" element={<PatientFormPage />} />
-          <Route path="patients/:patientId/entries/new" element={<EntryFormPage />} />
+          <Route path="patients/:patientId/edit" element={<ProtectedRoute roles={['admin', 'nurse']}><PatientFormPage /></ProtectedRoute>} />
+          <Route path="patients/:patientId/entries/new" element={<ProtectedRoute roles={['admin', 'nurse']}><EntryFormPage /></ProtectedRoute>} />
           <Route path="entries/:entryId" element={<ObservationDetailsPage />} />
-          <Route path="entries/:entryId/edit" element={<EntryFormPage />} />
+          <Route path="entries/:entryId/edit" element={<ProtectedRoute roles={['admin', 'nurse']}><EntryFormPage /></ProtectedRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

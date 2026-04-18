@@ -26,7 +26,10 @@ export function LanguageProvider({ children }: PropsWithChildren) {
     () => ({
       language,
       setLanguage,
-      t: (key: string) => resolveTranslation(translations[language], key),
+      t: (key: string) => {
+        const value = resolveTranslation(translations[language], key);
+        return value === key ? resolveTranslation(translations.en, key) : value;
+      },
     }),
     [language],
   );

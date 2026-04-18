@@ -46,6 +46,7 @@ export function AssessmentSection({ section, values, language, onChange }: Asses
                 onChange={(value) => onChange(field.key, value)}
                 yesLabel={t('common.yes')}
                 noLabel={t('common.no')}
+                clearLabel={t('common.clear')}
               />
             </label>
           );
@@ -62,9 +63,10 @@ interface FieldControlProps {
   onChange: (value: AssessmentValue) => void;
   yesLabel: string;
   noLabel: string;
+  clearLabel: string;
 }
 
-function FieldControl({ field, value, language, onChange, yesLabel, noLabel }: FieldControlProps) {
+function FieldControl({ field, value, language, onChange, yesLabel, noLabel, clearLabel }: FieldControlProps) {
   if (field.type === 'textarea') {
     return <textarea rows={4} value={String(value)} onChange={(event) => onChange(event.target.value)} />;
   }
@@ -79,6 +81,7 @@ function FieldControl({ field, value, language, onChange, yesLabel, noLabel }: F
         {[
           { value: 'yes', label: yesLabel },
           { value: 'no', label: noLabel },
+          { value: '', label: clearLabel },
         ].map((option) => (
           <label key={option.value} className={value === option.value ? 'choice-pill active' : 'choice-pill'}>
             <input

@@ -21,7 +21,7 @@ export function initializeDatabase() {
       full_name TEXT NOT NULL,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin', 'nurse')),
+      role TEXT NOT NULL CHECK(role IN ('admin', 'nurse', 'doctor')),
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -35,6 +35,7 @@ export function initializeDatabase() {
       weight REAL,
       medical_history TEXT,
       admission_date TEXT NOT NULL,
+      discharge_date TEXT,
       bed_number TEXT NOT NULL,
       created_by_user_id INTEGER NOT NULL,
       created_at TEXT NOT NULL,
@@ -58,6 +59,40 @@ export function initializeDatabase() {
     );
   `);
 
+  const usersTableSql = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'`)
+    .get()?.sql;
+
+  if (usersTableSql && !usersTableSql.includes(`'doctor'`)) {
+    db.exec(`PRAGMA foreign_keys = OFF`);
+    db.exec(`
+      ALTER TABLE users RENAME TO users_old;
+
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('admin', 'nurse', 'doctor')),
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      INSERT INTO users (id, full_name, username, password_hash, role, status, created_at, updated_at)
+      SELECT id, full_name, username, password_hash, role, status, created_at, updated_at
+      FROM users_old;
+
+      DROP TABLE users_old;
+    `);
+    db.exec(`PRAGMA foreign_keys = ON`);
+  }
+
+  const patientColumns = db.prepare(`PRAGMA table_info(patients)`).all();
+  if (!patientColumns.some((column) => column.name === 'discharge_date')) {
+    db.exec(`ALTER TABLE patients ADD COLUMN discharge_date TEXT`);
+  }
+
   seedDefaults();
 }
 
@@ -66,6 +101,9 @@ function seedDefaults() {
   const nurseExists = db
     .prepare(`SELECT COUNT(*) AS count FROM users WHERE username = ?`)
     .get(appConfig.seedNurseUsername).count;
+  const doctorExists = db
+    .prepare(`SELECT COUNT(*) AS count FROM users WHERE username = ?`)
+    .get(appConfig.seedDoctorUsername).count;
 
   if (adminCount === 0) {
     const timestamp = now();
@@ -98,6 +136,22 @@ function seedDefaults() {
       timestamp,
     );
   }
+
+  if (!doctorExists) {
+    const timestamp = now();
+    db.prepare(
+      `
+        INSERT INTO users (full_name, username, password_hash, role, status, created_at, updated_at)
+        VALUES (?, ?, ?, 'doctor', 'active', ?, ?)
+      `,
+    ).run(
+      appConfig.seedDoctorName,
+      appConfig.seedDoctorUsername,
+      bcrypt.hashSync(appConfig.seedDoctorPassword, 10),
+      timestamp,
+      timestamp,
+    );
+  }
 }
 
 export function sanitizeUser(user) {
@@ -122,7 +176,7 @@ export function listUsers() {
       `
         SELECT id, full_name, username, role, status, created_at, updated_at
         FROM users
-        WHERE role = 'nurse'
+        WHERE role IN ('nurse', 'doctor')
         ORDER BY full_name COLLATE NOCASE
       `,
     )
@@ -144,7 +198,7 @@ export function createUser({ fullName, username, passwordHash, role = 'nurse', s
   return getUserById(result.lastInsertRowid);
 }
 
-export function updateUser(id, { fullName, username, status, passwordHash }) {
+export function updateUser(id, { fullName, username, role, status, passwordHash }) {
   const current = db.prepare(`SELECT * FROM users WHERE id = ?`).get(id);
   if (!current) {
     return null;
@@ -154,10 +208,18 @@ export function updateUser(id, { fullName, username, status, passwordHash }) {
   db.prepare(
     `
       UPDATE users
-      SET full_name = ?, username = ?, status = ?, password_hash = ?, updated_at = ?
+      SET full_name = ?, username = ?, role = ?, status = ?, password_hash = ?, updated_at = ?
       WHERE id = ?
     `,
-  ).run(fullName ?? current.full_name, username ?? current.username, status ?? current.status, passwordHash ?? current.password_hash, timestamp, id);
+  ).run(
+    fullName ?? current.full_name,
+    username ?? current.username,
+    role ?? current.role,
+    status ?? current.status,
+    passwordHash ?? current.password_hash,
+    timestamp,
+    id,
+  );
 
   return getUserById(id);
 }
@@ -171,9 +233,22 @@ export function getUserByUsername(username) {
   return db.prepare(`SELECT * FROM users WHERE username = ?`).get(username);
 }
 
-export function listPatients(search = '') {
+export function listPatients(search = '', status = 'active') {
   const query = search.trim();
-  const params = query ? [`%${query}%`, `%${query}%`, `%${query}%`] : [];
+  const filters = [];
+  const params = [];
+
+  if (status === 'active') {
+    filters.push('p.discharge_date IS NULL OR p.discharge_date = \'\'');
+  } else if (status === 'discharged') {
+    filters.push('p.discharge_date IS NOT NULL AND p.discharge_date != \'\'');
+  }
+
+  if (query) {
+    filters.push('(p.first_name LIKE ? OR p.last_name LIKE ? OR p.bed_number LIKE ?)');
+    params.push(`%${query}%`, `%${query}%`, `%${query}%`);
+  }
+
   const rows = db
     .prepare(
       `
@@ -187,11 +262,7 @@ export function listPatients(search = '') {
             LIMIT 1
           ) AS last_entry
         FROM patients p
-        ${
-          query
-            ? `WHERE p.first_name LIKE ? OR p.last_name LIKE ? OR p.bed_number LIKE ?`
-            : ''
-        }
+        ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
         ORDER BY p.updated_at DESC
       `,
     )
@@ -206,10 +277,10 @@ export function createPatient(input, userId) {
     .prepare(
       `
         INSERT INTO patients (
-          first_name, last_name, age, weight, medical_history, admission_date, bed_number,
+          first_name, last_name, age, weight, medical_history, admission_date, discharge_date, bed_number,
           created_by_user_id, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -219,6 +290,7 @@ export function createPatient(input, userId) {
       input.weight || null,
       input.medicalHistory || null,
       input.admissionDate,
+      input.dischargeDate || null,
       input.bedNumber,
       userId,
       timestamp,
@@ -238,7 +310,7 @@ export function updatePatient(id, input) {
   db.prepare(
     `
       UPDATE patients
-      SET first_name = ?, last_name = ?, age = ?, weight = ?, medical_history = ?, admission_date = ?, bed_number = ?, updated_at = ?
+      SET first_name = ?, last_name = ?, age = ?, weight = ?, medical_history = ?, admission_date = ?, discharge_date = ?, bed_number = ?, updated_at = ?
       WHERE id = ?
     `,
   ).run(
@@ -248,6 +320,7 @@ export function updatePatient(id, input) {
     input.weight || null,
     input.medicalHistory || null,
     input.admissionDate,
+    input.dischargeDate || null,
     input.bedNumber,
     timestamp,
     id,
@@ -411,6 +484,8 @@ function mapPatientRow(row) {
     weight: row.weight,
     medicalHistory: row.medical_history,
     admissionDate: row.admission_date,
+    dischargeDate: row.discharge_date ?? '',
+    status: row.discharge_date ? 'discharged' : 'active',
     bedNumber: row.bed_number,
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
