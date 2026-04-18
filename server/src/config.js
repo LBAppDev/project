@@ -35,6 +35,7 @@ export const appConfig = {
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
   firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
   firebasePrivateKey: parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
+  firebaseDatabaseUrl: process.env.FIREBASE_DATABASE_URL || '',
   seedAdminUsername: process.env.SEED_ADMIN_USERNAME || 'admin',
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD || 'admin123',
   seedAdminName: process.env.SEED_ADMIN_NAME || 'Administrateur principal',

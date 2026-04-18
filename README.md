@@ -26,6 +26,6 @@ It supports:
 ## Database Provider Switch
 
 - Local SQLite mode: `DB_PROVIDER=sqlite`
-- Firebase Firestore mode: `DB_PROVIDER=firestore`
-- Firestore server env vars: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
-- Keep Firestore access on the server only. The Express API writes to Firestore using the Firebase Admin SDK.
+- Firebase Realtime Database mode: `DB_PROVIDER=realtime`
+- Realtime Database server env vars: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_DATABASE_URL`
+- Keep Firebase access on the server only. The Express API writes to Firebase using the Admin SDK.

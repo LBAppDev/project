@@ -1,8 +1,8 @@
 import { appConfig } from '../config.js';
-import * as firestoreProvider from './firestore.js';
+import * as realtimeProvider from './realtime.js';
 import * as sqliteProvider from './sqlite.js';
 
-const provider = appConfig.dbProvider === 'firestore' ? firestoreProvider : sqliteProvider;
+const provider = appConfig.dbProvider === 'realtime' ? realtimeProvider : sqliteProvider;
 
 export const initializeDatabase = (...args) => provider.initializeDatabase(...args);
 export const sanitizeUser = (...args) => provider.sanitizeUser(...args);

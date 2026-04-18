@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getDatabase } from 'firebase-admin/database';
 import { appConfig } from '../config.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -18,77 +18,78 @@ function getFirebaseApp() {
         clientEmail: appConfig.firebaseClientEmail,
         privateKey: appConfig.firebasePrivateKey,
       }),
+      databaseURL: appConfig.firebaseDatabaseUrl,
     });
   }
 
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    return initializeApp();
+    return initializeApp({
+      databaseURL: appConfig.firebaseDatabaseUrl,
+    });
   }
 
   throw new Error(
-    'Firestore provider requires either GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY.',
+    'Realtime Database provider requires either GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY.',
   );
 }
 
-let firestoreDb;
+let realtimeDb;
 
 function getDb() {
-  if (!firestoreDb) {
-    firestoreDb = getFirestore(getFirebaseApp());
+  if (!realtimeDb) {
+    realtimeDb = getDatabase(getFirebaseApp());
   }
 
-  return firestoreDb;
+  return realtimeDb;
 }
 
-function usersCollection() {
-  return getDb().collection('users');
+function usersRef() {
+  return getDb().ref('users');
 }
 
-function patientsCollection() {
-  return getDb().collection('patients');
+function patientsRef() {
+  return getDb().ref('patients');
 }
 
-function entriesCollection() {
-  return getDb().collection('entries');
+function entriesRef() {
+  return getDb().ref('entries');
 }
 
 function countersRef() {
-  return getDb().collection('_meta').doc('counters');
+  return getDb().ref('_meta/counters');
 }
 
-function userFromDoc(snapshot) {
-  if (!snapshot.exists) {
+function userFromSnapshot(snapshot) {
+  const value = snapshot.val();
+  if (!value) {
     return null;
   }
 
-  return { ...snapshot.data(), id: Number(snapshot.id) };
+  return { ...value, id: Number(snapshot.key) };
 }
 
-function patientFromDoc(snapshot) {
-  if (!snapshot.exists) {
+function patientFromSnapshot(snapshot) {
+  const value = snapshot.val();
+  if (!value) {
     return null;
   }
 
-  return { ...snapshot.data(), id: Number(snapshot.id) };
+  return { ...value, id: Number(snapshot.key) };
 }
 
-function entryFromDoc(snapshot) {
-  if (!snapshot.exists) {
+function entryFromSnapshot(snapshot) {
+  const value = snapshot.val();
+  if (!value) {
     return null;
   }
 
-  return { ...snapshot.data(), id: Number(snapshot.id) };
+  return { ...value, id: Number(snapshot.key) };
 }
 
 async function nextId(counterName) {
-  return getDb().runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(countersRef());
-    const counters = snapshot.exists ? snapshot.data() : {};
-    const nextValue = Number(counters[counterName] ?? 0) + 1;
-
-    transaction.set(countersRef(), { [counterName]: nextValue }, { merge: true });
-    return nextValue;
-  });
+  const ref = countersRef().child(counterName);
+  const result = await ref.transaction((current) => Number(current ?? 0) + 1);
+  return Number(result.snapshot.val());
 }
 
 function compareEntriesDesc(a, b) {
@@ -128,6 +129,42 @@ function sanitizeUser(user) {
   };
 }
 
+async function getAllUsersRaw() {
+  const snapshot = await usersRef().get();
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  return Object.entries(snapshot.val()).map(([id, value]) => ({
+    ...value,
+    id: Number(id),
+  }));
+}
+
+async function getAllPatientsRaw() {
+  const snapshot = await patientsRef().get();
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  return Object.entries(snapshot.val()).map(([id, value]) => ({
+    ...value,
+    id: Number(id),
+  }));
+}
+
+async function getAllEntriesRaw() {
+  const snapshot = await entriesRef().get();
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  return Object.entries(snapshot.val()).map(([id, value]) => ({
+    ...value,
+    id: Number(id),
+  }));
+}
+
 async function hydrateEntry(row) {
   const [createdBy, updatedBy] = await Promise.all([
     getUserById(row.created_by_user_id),
@@ -150,35 +187,35 @@ async function hydrateEntry(row) {
 }
 
 async function setPatientLastEntry(patientId) {
-  const patientRef = patientsCollection().doc(String(patientId));
-  const entriesSnapshot = await entriesCollection().where('patient_id', '==', patientId).get();
-  const entries = entriesSnapshot.docs.map(entryFromDoc).filter(Boolean).sort(compareEntriesDesc);
+  const entries = (await getAllEntriesRaw())
+    .filter((entry) => entry.patient_id === patientId)
+    .sort(compareEntriesDesc);
   const latest = entries[0];
 
-  await patientRef.set(
-    {
-      last_entry: latest ? `${latest.entry_date} ${latest.entry_time}` : null,
-      updated_at: now(),
-    },
-    { merge: true },
-  );
+  await patientsRef().child(String(patientId)).update({
+    last_entry: latest ? `${latest.entry_date} ${latest.entry_time}` : null,
+    updated_at: now(),
+  });
 }
 
 export async function initializeDatabase() {
+  if (!appConfig.firebaseDatabaseUrl) {
+    throw new Error('Realtime Database provider requires FIREBASE_DATABASE_URL.');
+  }
+
   await seedDefaults();
 }
 
 async function seedDefaults() {
-  const [adminsSnapshot, nurseSnapshot] = await Promise.all([
-    usersCollection().where('role', '==', 'admin').limit(1).get(),
-    usersCollection().where('username', '==', appConfig.seedNurseUsername).limit(1).get(),
-  ]);
+  const users = await getAllUsersRaw();
+  const adminExists = users.some((user) => user.role === 'admin');
+  const nurseExists = users.some((user) => user.username === appConfig.seedNurseUsername);
 
-  if (adminsSnapshot.empty) {
+  if (!adminExists) {
     const timestamp = now();
     const id = await nextId('users');
 
-    await usersCollection().doc(String(id)).set({
+    await usersRef().child(String(id)).set({
       id,
       full_name: appConfig.seedAdminName,
       username: appConfig.seedAdminUsername,
@@ -190,11 +227,11 @@ async function seedDefaults() {
     });
   }
 
-  if (nurseSnapshot.empty) {
+  if (!nurseExists) {
     const timestamp = now();
     const id = await nextId('users');
 
-    await usersCollection().doc(String(id)).set({
+    await usersRef().child(String(id)).set({
       id,
       full_name: appConfig.seedNurseName,
       username: appConfig.seedNurseUsername,
@@ -210,11 +247,10 @@ async function seedDefaults() {
 export { sanitizeUser };
 
 export async function listUsers() {
-  const snapshot = await usersCollection().where('role', '==', 'nurse').get();
+  const users = await getAllUsersRaw();
 
-  return snapshot.docs
-    .map(userFromDoc)
-    .filter(Boolean)
+  return users
+    .filter((user) => user.role === 'nurse')
     .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr', { sensitivity: 'base' }))
     .map(sanitizeUser);
 }
@@ -223,7 +259,7 @@ export async function createUser({ fullName, username, passwordHash, role = 'nur
   const timestamp = now();
   const id = await nextId('users');
 
-  await usersCollection().doc(String(id)).set({
+  await usersRef().child(String(id)).set({
     id,
     full_name: fullName,
     username,
@@ -238,52 +274,42 @@ export async function createUser({ fullName, username, passwordHash, role = 'nur
 }
 
 export async function updateUser(id, { fullName, username, status, passwordHash }) {
-  const current = await getUserByUsernameIdRaw(id);
+  const current = await getUserByIdRaw(id);
   if (!current) {
     return null;
   }
 
-  await usersCollection().doc(String(id)).set(
-    {
-      full_name: fullName ?? current.full_name,
-      username: username ?? current.username,
-      status: status ?? current.status,
-      password_hash: passwordHash ?? current.password_hash,
-      updated_at: now(),
-    },
-    { merge: true },
-  );
+  await usersRef().child(String(id)).update({
+    full_name: fullName ?? current.full_name,
+    username: username ?? current.username,
+    status: status ?? current.status,
+    password_hash: passwordHash ?? current.password_hash,
+    updated_at: now(),
+  });
 
   return getUserById(id);
 }
 
-async function getUserByUsernameIdRaw(id) {
-  const snapshot = await usersCollection().doc(String(id)).get();
-  return userFromDoc(snapshot);
+async function getUserByIdRaw(id) {
+  const snapshot = await usersRef().child(String(id)).get();
+  return userFromSnapshot(snapshot);
 }
 
 export async function getUserById(id) {
-  const user = await getUserByUsernameIdRaw(id);
+  const user = await getUserByIdRaw(id);
   return sanitizeUser(user);
 }
 
 export async function getUserByUsername(username) {
-  const snapshot = await usersCollection().where('username', '==', username).limit(1).get();
-
-  if (snapshot.empty) {
-    return null;
-  }
-
-  return userFromDoc(snapshot.docs[0]);
+  const users = await getAllUsersRaw();
+  return users.find((user) => user.username === username) ?? null;
 }
 
 export async function listPatients(search = '') {
-  const snapshot = await patientsCollection().get();
+  const patients = await getAllPatientsRaw();
   const query = search.trim().toLowerCase();
 
-  return snapshot.docs
-    .map(patientFromDoc)
-    .filter(Boolean)
+  return patients
     .filter((patient) => {
       if (!query) {
         return true;
@@ -301,7 +327,7 @@ export async function createPatient(input, userId) {
   const timestamp = now();
   const id = await nextId('patients');
 
-  await patientsCollection().doc(String(id)).set({
+  await patientsRef().child(String(id)).set({
     id,
     first_name: input.firstName,
     last_name: input.lastName,
@@ -320,46 +346,46 @@ export async function createPatient(input, userId) {
 }
 
 export async function updatePatient(id, input) {
-  const current = await patientsCollection().doc(String(id)).get();
-  if (!current.exists) {
+  const current = await getPatientByIdRaw(id);
+  if (!current) {
     return null;
   }
 
-  const existing = current.data();
-
-  await patientsCollection().doc(String(id)).set(
-    {
-      first_name: input.firstName,
-      last_name: input.lastName,
-      age: input.age ?? null,
-      weight: input.weight ?? null,
-      medical_history: input.medicalHistory || null,
-      admission_date: input.admissionDate,
-      bed_number: input.bedNumber,
-      updated_at: now(),
-      last_entry: existing.last_entry ?? null,
-    },
-    { merge: true },
-  );
+  await patientsRef().child(String(id)).update({
+    first_name: input.firstName,
+    last_name: input.lastName,
+    age: input.age ?? null,
+    weight: input.weight ?? null,
+    medical_history: input.medicalHistory || null,
+    admission_date: input.admissionDate,
+    bed_number: input.bedNumber,
+    updated_at: now(),
+  });
 
   return getPatientById(id);
 }
 
+async function getPatientByIdRaw(id) {
+  const snapshot = await patientsRef().child(String(id)).get();
+  return patientFromSnapshot(snapshot);
+}
+
 export async function getPatientById(id) {
-  const snapshot = await patientsCollection().doc(String(id)).get();
-  const row = patientFromDoc(snapshot);
+  const row = await getPatientByIdRaw(id);
   return row ? mapPatientRow(row) : null;
 }
 
 export async function listEntriesByPatient(patientId) {
-  const snapshot = await entriesCollection().where('patient_id', '==', patientId).get();
-  const rows = snapshot.docs.map(entryFromDoc).filter(Boolean).sort(compareEntriesDesc);
-  return Promise.all(rows.map(hydrateEntry));
+  const entries = (await getAllEntriesRaw())
+    .filter((entry) => entry.patient_id === patientId)
+    .sort(compareEntriesDesc);
+
+  return Promise.all(entries.map(hydrateEntry));
 }
 
 export async function getEntryById(id) {
-  const snapshot = await entriesCollection().doc(String(id)).get();
-  const row = entryFromDoc(snapshot);
+  const snapshot = await entriesRef().child(String(id)).get();
+  const row = entryFromSnapshot(snapshot);
   return row ? hydrateEntry(row) : null;
 }
 
@@ -367,7 +393,7 @@ export async function createEntry(patientId, input, userId) {
   const timestamp = now();
   const id = await nextId('entries');
 
-  await entriesCollection().doc(String(id)).set({
+  await entriesRef().child(String(id)).set({
     id,
     patient_id: patientId,
     entry_date: input.entryDate,
@@ -384,68 +410,67 @@ export async function createEntry(patientId, input, userId) {
 }
 
 export async function updateEntry(id, input, userId) {
-  const current = await entriesCollection().doc(String(id)).get();
-  if (!current.exists) {
+  const current = await getEntryByIdRaw(id);
+  if (!current) {
     return null;
   }
 
-  const currentData = current.data();
+  await entriesRef().child(String(id)).update({
+    entry_date: input.entryDate,
+    entry_time: input.entryTime,
+    assessment_json: JSON.stringify(input.assessment),
+    updated_by_user_id: userId,
+    updated_at: now(),
+  });
 
-  await entriesCollection().doc(String(id)).set(
-    {
-      entry_date: input.entryDate,
-      entry_time: input.entryTime,
-      assessment_json: JSON.stringify(input.assessment),
-      updated_by_user_id: userId,
-      updated_at: now(),
-    },
-    { merge: true },
-  );
-
-  await setPatientLastEntry(currentData.patient_id);
+  await setPatientLastEntry(current.patient_id);
   return getEntryById(id);
 }
 
+async function getEntryByIdRaw(id) {
+  const snapshot = await entriesRef().child(String(id)).get();
+  return entryFromSnapshot(snapshot);
+}
+
 export async function deleteEntry(id) {
-  const current = await entriesCollection().doc(String(id)).get();
-  if (!current.exists) {
+  const current = await getEntryByIdRaw(id);
+  if (!current) {
     return false;
   }
 
-  const currentData = current.data();
-  await entriesCollection().doc(String(id)).delete();
-  await setPatientLastEntry(currentData.patient_id);
+  await entriesRef().child(String(id)).remove();
+  await setPatientLastEntry(current.patient_id);
   return true;
 }
 
 export async function getDashboardStats() {
-  const [usersSnapshot, patientsSnapshot, entriesSnapshot] = await Promise.all([
-    usersCollection().where('role', '==', 'nurse').get(),
-    patientsCollection().get(),
-    entriesCollection().get(),
+  const [users, patients, entries] = await Promise.all([
+    getAllUsersRaw(),
+    getAllPatientsRaw(),
+    getAllEntriesRaw(),
   ]);
 
-  const entries = entriesSnapshot.docs.map(entryFromDoc).filter(Boolean).sort(compareEntriesDesc);
   const recentEntries = await Promise.all(
-    entries.slice(0, 5).map(async (entry) => {
-      const [patient, user] = await Promise.all([
-        getPatientById(entry.patient_id),
-        getUserById(entry.created_by_user_id),
-      ]);
+    entries
+      .sort(compareEntriesDesc)
+      .slice(0, 5)
+      .map(async (entry) => {
+        const [patient, user] = await Promise.all([
+          getPatientById(entry.patient_id),
+          getUserById(entry.created_by_user_id),
+        ]);
 
-      return {
-        id: entry.id,
-        entryDate: entry.entry_date,
-        entryTime: entry.entry_time,
-        patientName: patient ? `${patient.lastName} ${patient.firstName}` : '',
-        nurseName: user?.fullName ?? '',
-      };
-    }),
+        return {
+          id: entry.id,
+          entryDate: entry.entry_date,
+          entryTime: entry.entry_time,
+          patientName: patient ? `${patient.lastName} ${patient.firstName}` : '',
+          nurseName: user?.fullName ?? '',
+        };
+      }),
   );
 
-  const recentPatients = patientsSnapshot.docs
-    .map(patientFromDoc)
-    .filter(Boolean)
+  const recentPatients = patients
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     .slice(0, 5)
     .map((row) => ({
@@ -457,8 +482,8 @@ export async function getDashboardStats() {
     }));
 
   return {
-    nurses: usersSnapshot.size,
-    patients: patientsSnapshot.size,
+    nurses: users.filter((user) => user.role === 'nurse').length,
+    patients: patients.length,
     entriesToday: entries.filter((entry) => entry.entry_date === today()).length,
     recentEntries,
     recentPatients,
