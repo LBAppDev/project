@@ -504,6 +504,24 @@ for (const section of assessmentSchema) {
   }
 }
 
+const cardiacSection = assessmentSchema.find((section) => section.key === 'breathing');
+if (cardiacSection) {
+  const consciousnessOrder = ['glasgowScore', 'consciousnessState', 'somnolence', 'anxiety', 'actionsNotes'];
+  const orderedFields = consciousnessOrder
+    .map((key) => cardiacSection.fields.find((field) => field.key === key))
+    .filter((field): field is FieldSchema => Boolean(field));
+
+  cardiacSection.fields = cardiacSection.fields.filter((field) => !consciousnessOrder.includes(field.key));
+  const lowerEdemaIndex = cardiacSection.fields.findIndex((field) => field.key === 'lowerLimbEdemaCardiacGodet');
+  const insertAt = lowerEdemaIndex >= 0 ? lowerEdemaIndex + 1 : cardiacSection.fields.length;
+  cardiacSection.fields.splice(insertAt, 0, ...orderedFields);
+
+  const notesField = cardiacSection.fields.find((field) => field.key === 'actionsNotes');
+  if (notesField) {
+    notesField.label = { fr: 'Remarques', en: 'Notes', ar: 'ملاحظات' };
+  }
+}
+
 export function buildInitialAssessment() {
   return assessmentSchema.reduce<Record<string, Record<string, AssessmentValue>>>((sectionAcc, section) => {
     sectionAcc[section.key] = section.fields.reduce<Record<string, AssessmentValue>>((fieldAcc, field) => {
