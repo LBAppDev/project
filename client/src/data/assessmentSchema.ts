@@ -506,7 +506,7 @@ for (const section of assessmentSchema) {
 
 const cardiacSection = assessmentSchema.find((section) => section.key === 'breathing');
 if (cardiacSection) {
-  const consciousnessOrder = ['glasgowScore', 'consciousnessState', 'somnolence', 'anxiety', 'actionsNotes'];
+  const consciousnessOrder = ['consciousnessState', 'glasgowScore', 'somnolence', 'anxiety', 'actionsNotes'];
   const orderedFields = consciousnessOrder
     .map((key) => cardiacSection.fields.find((field) => field.key === key))
     .filter((field): field is FieldSchema => Boolean(field));
