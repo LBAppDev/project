@@ -6,7 +6,7 @@ export function signToken(user) {
   return jwt.sign({ userId: user.id, role: user.role }, appConfig.jwtSecret, { expiresIn: '12h' });
 }
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
 
@@ -16,7 +16,7 @@ export function requireAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, appConfig.jwtSecret);
-    const user = getUserById(payload.userId);
+    const user = await getUserById(payload.userId);
 
     if (!user || user.status !== 'active') {
       return res.status(401).json({ message: 'Unauthorized' });

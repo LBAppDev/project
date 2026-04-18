@@ -25,8 +25,6 @@ import { appConfig } from './config.js';
 import { requireAuth, requireRole, signToken } from './middleware/auth.js';
 import { normalizeNumber, requireFields } from './utils/validators.js';
 
-initializeDatabase();
-
 const app = express();
 app.use(
   cors({
@@ -45,7 +43,7 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ message: `Missing field: ${missing}` });
   }
 
-  const user = getUserByUsername(req.body.username.trim());
+  const user = await getUserByUsername(req.body.username.trim());
   if (!user || user.status !== 'active') {
     return res.status(401).json({ message: 'Identifiants invalides' });
   }
@@ -63,12 +61,12 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
-app.get('/api/dashboard/stats', requireAuth, (req, res) => {
-  res.json(getDashboardStats());
+app.get('/api/dashboard/stats', requireAuth, async (_req, res) => {
+  res.json(await getDashboardStats());
 });
 
-app.get('/api/nurses', requireAuth, requireRole('admin'), (_req, res) => {
-  res.json(listUsers());
+app.get('/api/nurses', requireAuth, requireRole('admin'), async (_req, res) => {
+  res.json(await listUsers());
 });
 
 app.post('/api/nurses', requireAuth, requireRole('admin'), async (req, res) => {
@@ -77,12 +75,12 @@ app.post('/api/nurses', requireAuth, requireRole('admin'), async (req, res) => {
     return res.status(400).json({ message: `Missing field: ${missing}` });
   }
 
-  const existing = getUserByUsername(req.body.username.trim());
+  const existing = await getUserByUsername(req.body.username.trim());
   if (existing) {
     return res.status(409).json({ message: 'Ce nom utilisateur existe deja' });
   }
 
-  const user = createUser({
+  const user = await createUser({
     fullName: req.body.fullName.trim(),
     username: req.body.username.trim(),
     passwordHash: await bcrypt.hash(req.body.password, 10),
@@ -94,12 +92,12 @@ app.post('/api/nurses', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 app.put('/api/nurses/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const existing = getUserByUsername(req.body.username.trim());
+  const existing = await getUserByUsername(req.body.username.trim());
   if (existing && existing.id !== Number(req.params.id)) {
     return res.status(409).json({ message: 'Ce nom utilisateur existe deja' });
   }
 
-  const updated = updateUser(Number(req.params.id), {
+  const updated = await updateUser(Number(req.params.id), {
     fullName: req.body.fullName?.trim(),
     username: req.body.username?.trim(),
     status: req.body.status,
@@ -113,17 +111,17 @@ app.put('/api/nurses/:id', requireAuth, requireRole('admin'), async (req, res) =
   return res.json(updated);
 });
 
-app.get('/api/patients', requireAuth, (req, res) => {
-  res.json(listPatients(req.query.search?.toString() ?? ''));
+app.get('/api/patients', requireAuth, async (req, res) => {
+  res.json(await listPatients(req.query.search?.toString() ?? ''));
 });
 
-app.post('/api/patients', requireAuth, (req, res) => {
+app.post('/api/patients', requireAuth, async (req, res) => {
   const missing = requireFields(req.body, ['firstName', 'lastName', 'admissionDate', 'bedNumber']);
   if (missing) {
     return res.status(400).json({ message: `Missing field: ${missing}` });
   }
 
-  const patient = createPatient(
+  const patient = await createPatient(
     {
       firstName: req.body.firstName.trim(),
       lastName: req.body.lastName.trim(),
@@ -139,22 +137,22 @@ app.post('/api/patients', requireAuth, (req, res) => {
   return res.status(201).json(patient);
 });
 
-app.get('/api/patients/:id', requireAuth, (req, res) => {
-  const patient = getPatientById(Number(req.params.id));
+app.get('/api/patients/:id', requireAuth, async (req, res) => {
+  const patient = await getPatientById(Number(req.params.id));
   if (!patient) {
     return res.status(404).json({ message: 'Patient introuvable' });
   }
 
-  return res.json({ patient, entries: listEntriesByPatient(patient.id) });
+  return res.json({ patient, entries: await listEntriesByPatient(patient.id) });
 });
 
-app.put('/api/patients/:id', requireAuth, (req, res) => {
+app.put('/api/patients/:id', requireAuth, async (req, res) => {
   const missing = requireFields(req.body, ['firstName', 'lastName', 'admissionDate', 'bedNumber']);
   if (missing) {
     return res.status(400).json({ message: `Missing field: ${missing}` });
   }
 
-  const patient = updatePatient(Number(req.params.id), {
+  const patient = await updatePatient(Number(req.params.id), {
     firstName: req.body.firstName.trim(),
     lastName: req.body.lastName.trim(),
     age: normalizeNumber(req.body.age),
@@ -171,8 +169,8 @@ app.put('/api/patients/:id', requireAuth, (req, res) => {
   return res.json(patient);
 });
 
-app.post('/api/patients/:id/entries', requireAuth, (req, res) => {
-  const patient = getPatientById(Number(req.params.id));
+app.post('/api/patients/:id/entries', requireAuth, async (req, res) => {
+  const patient = await getPatientById(Number(req.params.id));
   if (!patient) {
     return res.status(404).json({ message: 'Patient introuvable' });
   }
@@ -182,12 +180,12 @@ app.post('/api/patients/:id/entries', requireAuth, (req, res) => {
     return res.status(400).json({ message: `Missing field: ${missing}` });
   }
 
-  const entry = createEntry(patient.id, req.body, req.user.id);
+  const entry = await createEntry(patient.id, req.body, req.user.id);
   return res.status(201).json(entry);
 });
 
-app.get('/api/entries/:id', requireAuth, (req, res) => {
-  const entry = getEntryById(Number(req.params.id));
+app.get('/api/entries/:id', requireAuth, async (req, res) => {
+  const entry = await getEntryById(Number(req.params.id));
   if (!entry) {
     return res.status(404).json({ message: 'Observation introuvable' });
   }
@@ -195,13 +193,13 @@ app.get('/api/entries/:id', requireAuth, (req, res) => {
   return res.json(entry);
 });
 
-app.put('/api/entries/:id', requireAuth, (req, res) => {
+app.put('/api/entries/:id', requireAuth, async (req, res) => {
   const missing = requireFields(req.body, ['entryDate', 'entryTime', 'assessment']);
   if (missing) {
     return res.status(400).json({ message: `Missing field: ${missing}` });
   }
 
-  const entry = updateEntry(Number(req.params.id), req.body, req.user.id);
+  const entry = await updateEntry(Number(req.params.id), req.body, req.user.id);
   if (!entry) {
     return res.status(404).json({ message: 'Observation introuvable' });
   }
@@ -209,8 +207,8 @@ app.put('/api/entries/:id', requireAuth, (req, res) => {
   return res.json(entry);
 });
 
-app.delete('/api/entries/:id', requireAuth, (req, res) => {
-  const ok = deleteEntry(Number(req.params.id));
+app.delete('/api/entries/:id', requireAuth, async (req, res) => {
+  const ok = await deleteEntry(Number(req.params.id));
   if (!ok) {
     return res.status(404).json({ message: 'Observation introuvable' });
   }
@@ -231,6 +229,15 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ message: 'Erreur interne du serveur' });
 });
 
-app.listen(appConfig.port, () => {
-  console.log(`API running on http://localhost:${appConfig.port}`);
+async function startServer() {
+  await initializeDatabase();
+
+  app.listen(appConfig.port, () => {
+    console.log(`API running on http://localhost:${appConfig.port}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start server', error);
+  process.exit(1);
 });

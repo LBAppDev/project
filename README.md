@@ -22,3 +22,10 @@ It supports:
 - Start command: `npm start`
 - Required env vars: set at least `JWT_SECRET`
 - Recommended env vars: `CORS_ORIGIN=https://your-render-domain.onrender.com`
+
+## Database Provider Switch
+
+- Local SQLite mode: `DB_PROVIDER=sqlite`
+- Firebase Firestore mode: `DB_PROVIDER=firestore`
+- Firestore server env vars: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
+- Keep Firestore access on the server only. The Express API writes to Firestore using the Firebase Admin SDK.

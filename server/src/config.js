@@ -16,13 +16,25 @@ function parseOrigins(value) {
     .filter(Boolean);
 }
 
+function parsePrivateKey(value) {
+  if (!value) {
+    return '';
+  }
+
+  return value.replace(/\\n/g, '\n');
+}
+
 export const appConfig = {
   port: Number(process.env.PORT || 4000),
   jwtSecret: process.env.JWT_SECRET || 'change-this-secret-before-real-deploy',
   corsOrigins: parseOrigins(process.env.CORS_ORIGIN),
+  dbProvider: process.env.DB_PROVIDER || 'sqlite',
   dbPath:
     process.env.DB_PATH ||
     path.resolve(__dirname, '../data/nursing-app.db'),
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
+  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+  firebasePrivateKey: parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
   seedAdminUsername: process.env.SEED_ADMIN_USERNAME || 'admin',
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD || 'admin123',
   seedAdminName: process.env.SEED_ADMIN_NAME || 'Administrateur principal',
